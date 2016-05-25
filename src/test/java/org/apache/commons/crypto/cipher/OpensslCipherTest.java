@@ -24,6 +24,7 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
+import javax.crypto.spec.IvParameterSpec;
 
 import org.junit.Assert;
 import org.junit.Assume;
@@ -88,7 +89,7 @@ public class OpensslCipherTest extends AbstractCipherTest {
                 .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
         Assert.assertNotNull(cipher);
 
-        cipher.init(Openssl.ENCRYPT_MODE, KEY, IV);
+        cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(IV));
 
         // Require direct buffers
         ByteBuffer input = ByteBuffer.allocate(1024);
@@ -122,7 +123,7 @@ public class OpensslCipherTest extends AbstractCipherTest {
                 .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
         Assert.assertNotNull(cipher);
 
-        cipher.init(Openssl.ENCRYPT_MODE, KEY, IV);
+        cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(IV));
 
         // Require direct buffer
         ByteBuffer output = ByteBuffer.allocate(1024);
@@ -146,7 +147,7 @@ public class OpensslCipherTest extends AbstractCipherTest {
         final byte[] invalidKey = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
                 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x11 };
         try {
-            cipher.init(Openssl.ENCRYPT_MODE, invalidKey, IV);
+            cipher.init(Openssl.ENCRYPT_MODE, invalidKey, new IvParameterSpec(IV));
             Assert.fail("java.security.InvalidKeyException should be thrown.");
         } catch (Exception e) {
             Assert.assertTrue(e.getMessage().contains("Invalid AES key length: " + invalidKey.length + " bytes"));
@@ -164,7 +165,7 @@ public class OpensslCipherTest extends AbstractCipherTest {
         final byte[] invalidIV = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
                 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x11 };
         try {
-            cipher.init(Openssl.ENCRYPT_MODE, KEY, invalidIV);
+            cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(invalidIV));
             Assert.fail("java.security.InvalidAlgorithmParameterException should be thrown.");
         } catch (Exception e) {
             Assert.assertTrue(e.getMessage().contains("Wrong IV length: must be 16 bytes long"));

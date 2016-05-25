@@ -28,6 +28,7 @@ import java.util.Properties;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 
 import org.apache.commons.crypto.utils.Utils;
@@ -39,6 +40,9 @@ public class OpensslCipher implements CryptoCipher {
     private final Properties props;
     private final CipherTransformation transformation;
     private final Openssl cipher;
+
+
+    private boolean initialized = false;
 
     /**
      * Constructs a {@link CryptoCipher} using JNI into OpenSSL
@@ -99,15 +103,9 @@ public class OpensslCipher implements CryptoCipher {
         if (mode == ENCRYPT_MODE) {
             cipherMode = Openssl.ENCRYPT_MODE;
         }
-        byte[] iv;
-        if (params instanceof IvParameterSpec) {
-            iv = ((IvParameterSpec) params).getIV();
-        } else {
-            // other AlgorithmParameterSpec such as GCMParameterSpec is not
-            // supported now.
-            throw new InvalidAlgorithmParameterException("Illegal parameters");
-        }
-        cipher.init(cipherMode, key.getEncoded(), iv);
+
+        cipher.init(cipherMode, key.getEncoded(), params);
+        initialized = true;
     }
 
     /**
@@ -169,8 +167,7 @@ public class OpensslCipher implements CryptoCipher {
     public int doFinal(ByteBuffer inBuffer, ByteBuffer outBuffer)
             throws ShortBufferException, IllegalBlockSizeException,
             BadPaddingException {
-        int n = cipher.update(inBuffer, outBuffer);
-        return n + cipher.doFinal(outBuffer);
+          return cipher.doFinal(inBuffer, outBuffer);
     }
 
     /**
@@ -198,9 +195,86 @@ public class OpensslCipher implements CryptoCipher {
     public int doFinal(byte[] input, int inputOffset, int inputLen,
             byte[] output, int outputOffset) throws ShortBufferException,
             IllegalBlockSizeException, BadPaddingException {
-        int n = cipher.update(input, inputOffset, inputLen, output,
-                outputOffset);
-        return n + cipher.doFinal(output, outputOffset + n);
+        return cipher.doFinal(input, inputOffset, inputLen, output,outputOffset);
+    }
+
+    /**
+     * Continues a multi-part update of the Additional Authentication
+     * Data (AAD).
+     * <p>
+     * Calls to this method provide AAD to the cipher when operating in
+     * modes such as AEAD (GCM).  If this cipher is operating in
+     * either GCM mode, all AAD must be supplied before beginning
+     * operations on the ciphertext (via the {@code update} and
+     * {@code doFinal} methods).
+     *
+     * @param aad the buffer containing the Additional Authentication Data
+     *
+     * @throws IllegalArgumentException if the {@code aad}
+     * byte array is null
+     * @throws IllegalStateException if this cipher is in a wrong state
+     * (e.g., has not been initialized), does not accept AAD, or if
+     * operating in either GCM mode and one of the {@code update}
+     * methods has already been called for the active
+     * encryption/decryption operation
+     * @throws UnsupportedOperationException if the implementation {@code cipher}
+     * doesn't support this operation.
+     */
+    @Override
+    public void updateAAD(byte[] aad) throws IllegalArgumentException,
+            IllegalStateException, UnsupportedOperationException {
+        if (aad == null) {
+            throw new IllegalArgumentException("aad buffer is null");
+        }
+        if (!initialized) {
+            throw new IllegalStateException("Cipher not initialized");
+        }
+        if (aad.length == 0) {
+            return;
+        }
+
+        cipher.updateAAD(aad);
+    }
+
+    /**
+     * Continues a multi-part update of the Additional Authentication
+     * Data (AAD).
+     * <p>
+     * Calls to this method provide AAD to the cipher when operating in
+     * modes such as AEAD (GCM).  If this cipher is operating in
+     * either GCM mode, all AAD must be supplied before beginning
+     * operations on the ciphertext (via the {@code update} and
+     * {@code doFinal} methods).
+     *
+     * @param aad the buffer containing the Additional Authentication Data
+     *
+     * @throws IllegalArgumentException if the {@code aad}
+     * byte array is null
+     * @throws IllegalStateException if this cipher is in a wrong state
+     * (e.g., has not been initialized), does not accept AAD, or if
+     * operating in either GCM mode and one of the {@code update}
+     * methods has already been called for the active
+     * encryption/decryption operation
+     * @throws UnsupportedOperationException if the implementation {@code cipher}
+     * doesn't support this operation.
+     */
+    @Override
+    public void updateAAD(ByteBuffer aad) throws IllegalArgumentException,
+            IllegalStateException, UnsupportedOperationException {
+        if (aad == null) {
+            throw new IllegalArgumentException("aad buffer is null");
+        }
+        if (!initialized) {
+            throw new IllegalStateException("Cipher not initialized");
+        }
+
+        int aadLen = aad.limit() - aad.position();
+        if (aadLen == 0) {
+            return;
+        }
+        byte[] aadBytes = new byte[aadLen];
+        aad.get(aadBytes);
+        cipher.updateAAD(aadBytes);
     }
 
     /**

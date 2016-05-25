@@ -28,7 +28,9 @@ public enum CipherTransformation {
     /** A crypto transformation representing AES/CBC/NoPadding */
     AES_CBC_NOPADDING("AES/CBC/NoPadding", 16),
     /** A crypto transformation representing AES/CBC/PKCS5Padding */
-    AES_CBC_PKCS5PADDING("AES/CBC/PKCS5Padding", 16);
+    AES_CBC_PKCS5PADDING("AES/CBC/PKCS5Padding", 16),
+    /** A crypto transformation representing AES/GCM/NoPadding */
+    AES_GCM_NOPADDING("AES/GCM/NoPadding", 16);
 
     private final String name;
     private final int algorithmBlockSize;

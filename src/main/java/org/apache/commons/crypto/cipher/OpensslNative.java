@@ -81,6 +81,23 @@ public class OpensslNative {
      * @param input The input byte array
      * @param inputOffset The offset in input where the input starts
      * @param inputLength The input length
+     * @param output The byte buffer for the result
+     * @param outputOffset The offset in output where the result is stored
+     * @param maxOutputLength The maximum length for output
+     * @return The number of bytes stored in output
+     */
+    public native static int updateByteArrayByteBuffer(long context, byte[] input,
+            int inputOffset, int inputLength,
+            ByteBuffer output, int outputOffset, int maxOutputLength);
+
+    /**
+     * Continues a multiple-part encryption/decryption operation. The data is
+     * encrypted or decrypted, depending on how this cipher was initialized.
+     *
+     * @param context The cipher context address
+     * @param input The input byte array
+     * @param inputOffset The offset in input where the input starts
+     * @param inputLength The input length
      * @param output The byte array for the result
      * @param outputOffset The offset in output where the result is stored
      * @param maxOutputLength The maximum length for output
@@ -115,6 +132,18 @@ public class OpensslNative {
      */
     public native static int doFinalByteArray(long context, byte[] output,
             int offset, int maxOutputLength);
+
+    /**
+     * allows various cipher specific parameters to be determined and set.
+     * int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
+     *
+     * @param context The cipher context address
+     * @param type CtrlValues
+     * @param arg
+     * @param data Direct buffer or null
+     * @return return 0 if there is any error, else return 1.
+     */
+    public native static int ctrl(long context, int type, int arg, ByteBuffer data);
 
     /**
      * Cleans the context at native.
