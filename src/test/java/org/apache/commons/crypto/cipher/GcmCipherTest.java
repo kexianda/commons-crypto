@@ -19,6 +19,7 @@ package org.apache.commons.crypto.cipher;
 
 import java.nio.ByteBuffer;
 import java.security.Key;
+import java.util.Arrays;
 import java.util.Properties;
 import java.util.Random;
 
@@ -33,7 +34,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.xml.bind.DatatypeConverter;
 
-public class GcmModeCiperTest {
+public class GcmCipherTest {
 
     Properties props = null;
     String cipherClass = null;
@@ -69,8 +70,8 @@ public class GcmModeCiperTest {
         String tHex = "ab6e47d42cec13bdf53a67b21257bddf";
 
         testGcmEncryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
-        testGcmEncryptionByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmDecryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
+        testGcmByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmReturnDataAfterTagVerified(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmArbitraryLengthUpdate(kHex, pHex, ivHex, aadHex, cHex, tHex);
     }
@@ -98,8 +99,8 @@ public class GcmModeCiperTest {
         String tHex = "5bc94fbc3221a5db94fae95ae7121a47";
 
         testGcmEncryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
-        testGcmEncryptionByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmDecryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
+        testGcmByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmReturnDataAfterTagVerified(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmArbitraryLengthUpdate(kHex, pHex, ivHex, aadHex, cHex, tHex);
     }
@@ -131,8 +132,8 @@ public class GcmModeCiperTest {
         String tHex = "3612d2e79e3b0785561be14aaca2fccb";
 
         testGcmEncryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
-        testGcmEncryptionByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmDecryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
+        testGcmByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmReturnDataAfterTagVerified(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmArbitraryLengthUpdate(kHex, pHex, ivHex, aadHex, cHex, tHex);
     }
@@ -167,8 +168,8 @@ public class GcmModeCiperTest {
         String tHex = "619cc5aefffe0bfa462af43c1699d050";
 
         testGcmEncryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
-        testGcmEncryptionByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmDecryption(kHex, pHex, ivHex, aadHex, cHex, tHex);
+        testGcmByteBuffer(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmReturnDataAfterTagVerified(kHex, pHex, ivHex, aadHex, cHex, tHex);
         testGcmArbitraryLengthUpdate(kHex, pHex, ivHex, aadHex, cHex, tHex);
     }
@@ -273,15 +274,20 @@ public class GcmModeCiperTest {
         byte[] decOutput = new byte[input.length];
 
         try {
+            Random r = new Random();
+
             CryptoCipher enc = Utils.getCipherInstance(transformation, props);
-
             Key key = new SecretKeySpec(keyBytes, "AES");
-
             GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
             enc.init(CryptoCipher.ENCRYPT_MODE, key, iv);
-            enc.updateAAD(aad);
+            if (aad.length > 0) {
+                int len1 = r.nextInt(aad.length) ;
+                byte[] aad1 = Arrays.copyOfRange(aad, 0, len1);
+                byte[] aad2 = Arrays.copyOfRange(aad, len1, aad.length);
+                enc.updateAAD(aad1);
+                enc.updateAAD(aad2);
+            }
 
-            Random r = new Random();
             int partLen = r.nextInt(input.length);
             int len = enc.update(input, 0, partLen, encOutput, 0);
             Assert.assertTrue(len == partLen);
@@ -295,7 +301,13 @@ public class GcmModeCiperTest {
             CryptoCipher dec = Utils.getCipherInstance(transformation, props);
             dec.init(CryptoCipher.DECRYPT_MODE, new SecretKeySpec(keyBytes, "AES"),
                     new GCMParameterSpec(128, ivBytes));
-            dec.updateAAD(aad);
+            if (aad.length > 0) {
+                int len1 = r.nextInt(aad.length) ;
+                byte[] aad1 = Arrays.copyOfRange(aad, 0, len1);
+                byte[] aad2 = Arrays.copyOfRange(aad, len1, aad.length);
+                dec.updateAAD(aad1);
+                dec.updateAAD(aad2);
+            }
             byte[] decInput = encOutput;
             partLen = r.nextInt(input.length);
             len = dec.update(decInput, 0, partLen, decOutput, 0);
@@ -378,44 +390,63 @@ public class GcmModeCiperTest {
         }
     }
 
-    private void testGcmEncryptionByteBuffer(String kHex, String pHex, String ivHex, String aadHex,
+    private void testGcmByteBuffer(String kHex, String pHex, String ivHex, String aadHex,
                                    String cHex, String tHex){
 
         byte[] keyBytes = DatatypeConverter.parseHexBinary(kHex);
-        byte[] input = DatatypeConverter.parseHexBinary(pHex);
+        byte[] plainText = DatatypeConverter.parseHexBinary(pHex);
         byte[] ivBytes = DatatypeConverter.parseHexBinary(ivHex);
         byte[] aad = DatatypeConverter.parseHexBinary(aadHex);
-        byte[] expectedOutput = DatatypeConverter.parseHexBinary(cHex+tHex);
+        byte[] cipherText = DatatypeConverter.parseHexBinary(cHex+tHex);
 
-        byte[] output = new byte[expectedOutput.length];
+        byte[] encOutput = new byte[cipherText.length];
+        byte[] decOutput = new byte[plainText.length];
 
         try {
-            CryptoCipher c = Utils.getCipherInstance(transformation, props);
-
-            Key key = new SecretKeySpec(keyBytes, "AES");
-
-            GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
-            c.init(CryptoCipher.ENCRYPT_MODE, key, iv);
 
             ByteBuffer bfAAD = ByteBuffer.allocateDirect(aad.length);
             bfAAD.put(aad);
+
+            ByteBuffer bfPlainText;
+            ByteBuffer bfCipherText;
+            bfPlainText = ByteBuffer.allocateDirect(plainText.length);
+            bfCipherText = ByteBuffer.allocateDirect(encOutput.length);
+
+            // Encryption -------------------
+            CryptoCipher c = Utils.getCipherInstance(transformation, props);
+            Key key = new SecretKeySpec(keyBytes, "AES");
+            GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+            c.init(CryptoCipher.ENCRYPT_MODE, key, iv);
+
             bfAAD.flip();
             c.updateAAD(bfAAD);
 
-            ByteBuffer bfInput;
-            ByteBuffer bfOutput;
-            bfInput = ByteBuffer.allocateDirect(input.length);
-            bfOutput = ByteBuffer.allocateDirect(output.length);
-            bfInput.put(input);
-            bfInput.flip();
-            bfOutput.position(0);
+            bfPlainText.put(plainText);
+            bfPlainText.flip();
+            bfCipherText.position(0);
 
-            c.doFinal(bfInput, bfOutput);
+            c.doFinal(bfPlainText, bfCipherText);
 
-            bfOutput.flip();
-            bfOutput.get(output);
-            Assert.assertArrayEquals(expectedOutput, output);
+            bfCipherText.flip();
+            bfCipherText.get(encOutput);
+            Assert.assertArrayEquals(cipherText, encOutput);
             c.close();
+
+            // Decryption -------------------
+            CryptoCipher dec = Utils.getCipherInstance(transformation, props);
+            dec.init(CryptoCipher.DECRYPT_MODE, new SecretKeySpec(keyBytes, "AES"),
+                    new GCMParameterSpec(128, ivBytes));
+            bfAAD.flip();
+            dec.updateAAD(bfAAD);
+            bfCipherText.clear();
+            bfPlainText.clear();
+            bfCipherText.put(cipherText);
+            bfCipherText.flip();
+            dec.doFinal(bfCipherText, bfPlainText);
+            bfPlainText.flip();
+            bfPlainText.get(decOutput);
+            Assert.assertArrayEquals(plainText, decOutput);
+            dec.close();
         }
         catch (Exception ex) {
             Assert.fail(ex.getMessage());

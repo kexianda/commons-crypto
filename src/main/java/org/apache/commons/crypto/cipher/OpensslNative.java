@@ -135,15 +135,19 @@ public class OpensslNative {
 
     /**
      * allows various cipher specific parameters to be determined and set.
+     *
+     * it will call OpenSSL's API
      * int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr)
+     * In OpenSSL, data type of ptr can be char* or long*.  Here, we map java's
+     * byte[] to native void*ptr. Note that the byte order is ByteOrder.nativeOrder.
      *
      * @param context The cipher context address
      * @param type CtrlValues
      * @param arg
-     * @param data Direct buffer or null
+     * @param data byte buffer or null
      * @return return 0 if there is any error, else return 1.
      */
-    public native static int ctrl(long context, int type, int arg, ByteBuffer data);
+    public native static int ctrl(long context, int type, int arg, byte[] data);
 
     /**
      * Cleans the context at native.

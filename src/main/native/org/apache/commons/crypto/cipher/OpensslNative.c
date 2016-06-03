@@ -567,30 +567,45 @@ JNIEXPORT jint JNICALL Java_org_apache_commons_crypto_cipher_OpensslNative_doFin
 }
 
 JNIEXPORT jint JNICALL Java_org_apache_commons_crypto_cipher_OpensslNative_ctrl
-    (JNIEnv *env, jclass clazz, jlong ctx, jint type, jint arg, jobject data)
+    (JNIEnv *env, jclass clazz, jlong ctx, jint type, jint arg, jbyteArray data)
 {
     EVP_CIPHER_CTX *context = CONTEXT(ctx);
     int rc = 0;
+    void *data_ptr = NULL;
+    if (data != NULL) {
+      data_ptr = (void*) (*env)->GetByteArrayElements(env, data, 0);
+      if (data_ptr == NULL) {
+        THROW(env, "java/lang/InternalError", "Cannot get buffer address.");
+        return 0;
+      }
+    }
 
     // get/set tag for GCM
     if (type == EVP_CTRL_GCM_GET_TAG || type == EVP_CTRL_GCM_SET_TAG) {
       if (arg <= 0 || arg > 16) {
         THROW(env, "javax/crypto/AEADBadTagException", "TAG_LENGTH_INTERNAL_ERROR");
+        goto exit_;
       }
       if (data == NULL) {
         THROW(env, "javax/crypto/AEADBadTagException", "tag is null");
+        goto exit_;
       }
 
-      unsigned char *tag = (*env)->GetDirectBufferAddress(env, data);
+      unsigned char *tag = (unsigned char*) data_ptr;
       rc = dlsym_EVP_CIPHER_CTX_ctrl(context, type, arg, tag);
-
       if (!rc) {
         THROW(env, "javax/crypto/AEADBadTagException", "TAG_SET_ERROR or TAG_RETRIEVE_ERROR");
+        goto exit_;
       }
     } else {
       THROW(env, "java.lang.UnsupportedOperationException", "Not implemented yet!");
+      goto exit_;
     }
 
+exit_:
+    if (data_ptr != NULL) {
+      (*env)->ReleaseByteArrayElements(env, data, (jbyte *) data_ptr, 0);
+    }
     return rc;
 }
 

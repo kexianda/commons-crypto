@@ -19,6 +19,7 @@ package org.apache.commons.crypto.cipher;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.AlgorithmParameterSpec;
@@ -54,7 +55,7 @@ public final class Openssl {
     private int mode = Openssl.DECRYPT_MODE;
 
     // buffer for AAD data; if consumed, set as null
-    private byte[] aadBuffer;
+    private ByteArrayOutputStream aadBuffer = new ByteArrayOutputStream();
     private int tagBitLen = -1;
 
     // buffer for storing input in decryption, not used for encryption
@@ -474,10 +475,10 @@ public final class Openssl {
                     inputDataLen, output, outputOffset, output.length - outputOffset);
 
             // set tag to EVP_Cipher for integrity verification in doFinal
-            ByteBuffer bfTag = ByteBuffer.allocateDirect(getTagLen());
-            bfTag.put(input, input.length - getTagLen(), getTagLen());
-            bfTag.flip();
-            OpensslNative.ctrl(context, CtrlValues.AEAD_SET_TAG.getValue(), getTagLen(), bfTag);
+            ByteBuffer tag = ByteBuffer.allocate(getTagLen());
+            tag.put(input, input.length - getTagLen(), getTagLen());
+            tag.flip();
+            evpCipherCtxCtrl(context, CtrlValues.AEAD_SET_TAG.getValue(), getTagLen(), tag);
         } else {
             len = OpensslNative.updateByteArray(context, input, inputOffset,
                     inputLen, output, outputOffset, output.length - outputOffset);
@@ -490,8 +491,8 @@ public final class Openssl {
         if(algorithm == AlgorithmMode.AES_GCM.ordinal()
                 && this.mode == Openssl.ENCRYPT_MODE) {
             ByteBuffer tag;
-            tag = ByteBuffer.allocateDirect(getTagLen());
-            OpensslNative.ctrl(context, CtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
+            tag = ByteBuffer.allocate(getTagLen());
+            evpCipherCtxCtrl(context, CtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
             tag.get(output, output.length-getTagLen(), getTagLen());
             len += getTagLen();
         }
@@ -546,7 +547,7 @@ public final class Openssl {
         processAAD();
 
         int totalLen = 0;
-        int len = 0;
+        int len;
         if (algorithm == AlgorithmMode.AES_GCM.ordinal()
                 && this.mode == Openssl.DECRYPT_MODE) {
             // if GCM-DECRYPT, we have to handle the buffered input
@@ -579,11 +580,11 @@ public final class Openssl {
             }
 
             // set tag to EVP_Cipher for integrity verification in doFinal
-            ByteBuffer bfTag = ByteBuffer.allocateDirect(getTagLen());
-            bfTag.put(input);
-            bfTag.flip();
-            OpensslNative.ctrl(context, CtrlValues.AEAD_SET_TAG.getValue(),
-                    getTagLen(), bfTag);
+            ByteBuffer tag = ByteBuffer.allocate(getTagLen());
+            tag.put(input);
+            tag.flip();
+            evpCipherCtxCtrl(context, CtrlValues.AEAD_SET_TAG.getValue(),
+                    getTagLen(), tag);
         } else {
             len = OpensslNative.update(context, input, input.position(),
                     input.remaining(), output, output.position(),
@@ -603,10 +604,8 @@ public final class Openssl {
         if(algorithm == AlgorithmMode.AES_GCM.ordinal()
                 && this.mode == Openssl.ENCRYPT_MODE) {
             ByteBuffer tag;
-            tag = ByteBuffer.allocateDirect(getTagLen());
-            OpensslNative.ctrl(context, CtrlValues.AEAD_GET_TAG.getValue(),
-                    getTagLen(), tag);
-
+            tag = ByteBuffer.allocate(getTagLen());
+            evpCipherCtxCtrl(context, CtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
             output.put(tag);
             totalLen += getTagLen();
         }
@@ -637,7 +636,13 @@ public final class Openssl {
      */
     public void updateAAD(byte[] aad) {
         // must be called after initialized.
-        aadBuffer = aad.clone();
+        if (aadBuffer != null) {
+            aadBuffer.write(aad, 0, aad.length);
+        } else {
+            // update has already been called
+            throw new IllegalStateException
+                    ("Update has been called; no more AAD data");
+        }
     }
 
     /** Checks whether context is initialized. */
@@ -648,11 +653,28 @@ public final class Openssl {
     private void processAAD() {
         if (algorithm == AlgorithmMode.AES_GCM.ordinal()
                 && aadBuffer != null
-                && aadBuffer.length > 0) {
-            OpensslNative.updateByteArray(context, aadBuffer, 0, aadBuffer.length, null, 0, 0);
+                && aadBuffer.size() > 0) {
+            OpensslNative.updateByteArray(context, aadBuffer.toByteArray(),
+                    0, aadBuffer.size(), null, 0, 0);
             aadBuffer = null;
         }
     }
+
+    /**
+     * a wrapper of OpensslNative.ctrl(long context, int type, int arg, byte[] data)
+     * Since native interface EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr) is generic,
+     * it may set/get any native char or long type to the data buffer(ptr).
+     * Here we use ByteBuffer and set nativeOrder to handle the endianness.
+     */
+    private void evpCipherCtxCtrl(long context, int type, int arg, ByteBuffer bb) {
+        if (bb != null) {
+            bb.order(ByteOrder.nativeOrder());
+            OpensslNative.ctrl(context, type, arg, bb.array());
+        } else {
+            OpensslNative.ctrl(context, type, arg, null);
+        }
+    }
+
 
     private int getTagLen() {
         return tagBitLen < 0 ? DEFAULT_TAG_LEN : (tagBitLen >> 3);
