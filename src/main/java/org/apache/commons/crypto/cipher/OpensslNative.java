@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
  * JNI interface of {@link Openssl} implementation. The native method in this
  * class is defined in OpensslNative.h(genereted by javah).
  */
-public class OpensslNative {
+class OpensslNative {
 
     private OpensslNative() {
     }
