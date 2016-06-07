@@ -18,7 +18,6 @@
 package org.apache.commons.crypto.cipher;
 
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.AlgorithmParameterSpec;
@@ -42,7 +41,7 @@ import org.apache.commons.crypto.utils.Utils;
  * It do some common work and dispatch the real encryption/decryption
  * work to {@code OpensslBlockCipher} for different mode.
  */
-public final class Openssl {
+final class Openssl {
     private static final Log LOG = LogFactory.getLog(Openssl.class.getName());
 
     OpensslBlockCipher opensslBlockCipher = null;
