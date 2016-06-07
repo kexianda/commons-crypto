@@ -22,15 +22,24 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Properties;
+import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
 import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
+import org.apache.commons.crypto.conf.ConfigurationKeys;
+import org.apache.commons.crypto.utils.Utils;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 public class OpensslCipherTest extends AbstractCipherTest {
+
+    //Properties props = null;
+    //String cipherClass = null;
 
     @Override
     public void init() {
@@ -39,6 +48,10 @@ public class OpensslCipherTest extends AbstractCipherTest {
                 CipherTransformation.AES_CBC_PKCS5PADDING,
                 CipherTransformation.AES_CTR_NOPADDING };
         cipherClass = OpensslCipher.class.getName();
+
+        props = new Properties();
+        props.setProperty(ConfigurationKeys.COMMONS_CRYPTO_CIPHER_CLASSES_KEY,
+                cipherClass);
     }
 
     @Test(expected = NoSuchAlgorithmException.class, timeout = 120000)
@@ -71,8 +84,8 @@ public class OpensslCipherTest extends AbstractCipherTest {
 
     @Test(expected = NoSuchAlgorithmException.class, timeout = 120000)
     public void testInvalidMode() throws Exception {
+        Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
         try {
-            Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
             Openssl.getInstance("AES/CTR2/NoPadding");
             Assert.fail("java.security.NoSuchAlgorithmException should be thrown.");
         } catch (NoSuchAlgorithmException e) {
@@ -85,11 +98,9 @@ public class OpensslCipherTest extends AbstractCipherTest {
     @Test(timeout = 120000)
     public void testUpdateArguments() throws Exception {
         Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
-        Openssl cipher = Openssl
-                .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
-        Assert.assertNotNull(cipher);
 
-        cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(IV));
+        CryptoCipher cipher = Utils.getCipherInstance(CipherTransformation.AES_CTR_NOPADDING, props);
+        cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(KEY, "AES"), new IvParameterSpec(IV));
 
         // Require direct buffers
         ByteBuffer input = ByteBuffer.allocate(1024);
@@ -119,17 +130,15 @@ public class OpensslCipherTest extends AbstractCipherTest {
     @Test(timeout = 120000)
     public void testDoFinalArguments() throws Exception {
         Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
-        Openssl cipher = Openssl
-                .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
-        Assert.assertNotNull(cipher);
-
-        cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(IV));
+        CryptoCipher cipher = Utils.getCipherInstance(CipherTransformation.AES_CTR_NOPADDING, props);
+        cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(KEY, "AES"), new IvParameterSpec(IV));
 
         // Require direct buffer
+        ByteBuffer input = ByteBuffer.allocate(1024);
         ByteBuffer output = ByteBuffer.allocate(1024);
 
         try {
-            cipher.doFinal(output);
+            cipher.doFinal(input, output);
             Assert.fail("Output buffer should be direct buffer.");
         } catch (IllegalArgumentException e) {
             Assert.assertTrue(e.getMessage().contains(
@@ -140,14 +149,15 @@ public class OpensslCipherTest extends AbstractCipherTest {
     @Test(expected = InvalidKeyException.class, timeout = 120000)
     public void testInvalidKey() throws Exception {
         Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
-        Openssl cipher = Openssl
-                .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
-        Assert.assertNotNull(cipher);
+
+        CryptoCipher cipher = Utils.getCipherInstance(CipherTransformation.AES_CTR_NOPADDING, props);
+        cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(KEY, "AES"), new IvParameterSpec(IV));
 
         final byte[] invalidKey = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
                 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x11 };
         try {
-            cipher.init(Openssl.ENCRYPT_MODE, invalidKey, new IvParameterSpec(IV));
+            cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(invalidKey, "AES"),
+                    new IvParameterSpec(IV));
             Assert.fail("java.security.InvalidKeyException should be thrown.");
         } catch (Exception e) {
             Assert.assertTrue(e.getMessage().contains("Invalid AES key length: " + invalidKey.length + " bytes"));
@@ -158,14 +168,14 @@ public class OpensslCipherTest extends AbstractCipherTest {
     @Test(expected = InvalidAlgorithmParameterException.class, timeout = 120000)
     public void testInvalidIV() throws Exception {
         Assume.assumeTrue(Openssl.getLoadingFailureReason() == null);
-        Openssl cipher = Openssl
-                .getInstance(CipherTransformation.AES_CTR_NOPADDING.getName());
-        Assert.assertNotNull(cipher);
+        CryptoCipher cipher = Utils.getCipherInstance(CipherTransformation.AES_CTR_NOPADDING, props);
+        cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(KEY, "AES"), new IvParameterSpec(IV));
 
         final byte[] invalidIV = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
                 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x11 };
         try {
-            cipher.init(Openssl.ENCRYPT_MODE, KEY, new IvParameterSpec(invalidIV));
+            cipher.init(CryptoCipher.ENCRYPT_MODE, new SecretKeySpec(KEY, "AES"),
+                    new IvParameterSpec(invalidIV));
             Assert.fail("java.security.InvalidAlgorithmParameterException should be thrown.");
         } catch (Exception e) {
             Assert.assertTrue(e.getMessage().contains("Wrong IV length: must be 16 bytes long"));

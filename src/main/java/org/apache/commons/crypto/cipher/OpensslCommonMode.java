@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.commons.crypto.cipher;
 
 import javax.crypto.BadPaddingException;
@@ -9,18 +26,21 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.spec.AlgorithmParameterSpec;
 
 /**
- * For  CTR, CBC mode
+ * This class do the real work(Encryption/Decryption) for CTR, CBC mode.
+ *
+ * It will call the OpenSSL API to implement encryption/decryption
  *
  */
 class OpensslCommonMode extends OpensslBlockCipher{
 
-    //private long context = 0;
-    //private int mode = Openssl.DECRYPT_MODE;
+    public OpensslCommonMode(long context, int algorithmMode, int padding) {
+        super(context, algorithmMode, padding);
+    }
 
     @Override
-    public void init(int mode, int alg, int padding, byte[] key, AlgorithmParameterSpec params)
+    public void init(int mode, byte[] key, AlgorithmParameterSpec params)
             throws InvalidAlgorithmParameterException {
-        this.mode = mode;
+        this.cipherMode = mode;
         byte[] iv;
         if (params instanceof IvParameterSpec) {
             iv = ((IvParameterSpec) params).getIV();
@@ -28,7 +48,7 @@ class OpensslCommonMode extends OpensslBlockCipher{
             // other AlgorithmParameterSpec is not supported now.
             throw new InvalidAlgorithmParameterException("Illegal parameters");
         }
-        context = OpensslNative.init(context, mode, alg, padding, key, iv);
+        context = OpensslNative.init(context, mode, algorithmMode, padding, key, iv);
     }
 
     @Override

@@ -1,3 +1,20 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.commons.crypto.cipher;
 
 
@@ -8,19 +25,18 @@ import javax.crypto.ShortBufferException;
 import javax.crypto.spec.GCMParameterSpec;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.spec.AlgorithmParameterSpec;
 
 /**
- * The Openssl EVP API slightly differ from JCE API.
- * OpensslGaloisCounterMode provide JCE -like behavior, using OpenSSL EVP API
+ * This class do the real work(Encryption/Decryption/Authentication) for GCM.
+ *
+ * It will call the OpenSSL API to implement JCE-like behavior
  *
  * @since 1.1
  */
 class OpensslGaloisCounterMode extends OpensslBlockCipher{
-
-//    private long context = 0;
-//    private int mode = Openssl.DECRYPT_MODE;
 
     // buffer for AAD data; if consumed, set as null
     private ByteArrayOutputStream aadBuffer = new ByteArrayOutputStream();
@@ -31,11 +47,15 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
     // buffer for storing input in decryption, not used for encryption
     private ByteArrayOutputStream inBuffer = null;
 
+    public OpensslGaloisCounterMode(long context, int algorithmMode, int padding) {
+        super(context, algorithmMode, padding);
+    }
+
     @Override
-    public void init(int mode, int alg, int padding, byte[] key, AlgorithmParameterSpec params)
+    public void init(int mode,  byte[] key, AlgorithmParameterSpec params)
             throws InvalidAlgorithmParameterException {
 
-        this.mode = mode;
+        this.cipherMode = mode;
         byte[] iv;
         if(params instanceof GCMParameterSpec) {
             GCMParameterSpec gcmParam = (GCMParameterSpec) params;
@@ -46,11 +66,11 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
             throw new InvalidAlgorithmParameterException("Illegal parameters");
         }
 
-        if (this.mode == Openssl.DECRYPT_MODE) {
+        if (this.cipherMode == Openssl.DECRYPT_MODE) {
             inBuffer = new ByteArrayOutputStream();
         }
 
-        context = OpensslNative.init(context, mode, alg, padding, key, iv);
+        context = OpensslNative.init(context, mode, algorithmMode, padding, key, iv);
     }
 
     @Override
@@ -58,7 +78,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
         processAAD();
 
         int len;
-        if (this.mode == Openssl.DECRYPT_MODE) {
+        if (this.cipherMode == Openssl.DECRYPT_MODE) {
             // store internally until doFinal(decrypt) is called because
             // spec mentioned that only return recovered data after tag
             // is successfully verified
@@ -83,7 +103,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
             throws ShortBufferException {
         processAAD();
 
-        if (this.mode == Openssl.DECRYPT_MODE) {
+        if (this.cipherMode == Openssl.DECRYPT_MODE) {
             // store internally until doFinal(decrypt) is called because
             // spec mentioned that only return recovered data after tag
             // is successfully verified
@@ -102,7 +122,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
         processAAD();
 
         int len;
-        if (this.mode == Openssl.DECRYPT_MODE) {
+        if (this.cipherMode == Openssl.DECRYPT_MODE) {
             // if GCM-DECRYPT, we have to handle the buffered input
             // and the retrieve the trailing tag from input
             int inputOffsetFinal = inputOffset;
@@ -130,7 +150,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
             ByteBuffer tag = ByteBuffer.allocate(getTagLen());
             tag.put(input, input.length - getTagLen(), getTagLen());
             tag.flip();
-            Openssl.evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_SET_TAG.getValue(), getTagLen(), tag);
+            evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_SET_TAG.getValue(), getTagLen(), tag);
         } else {
             len = OpensslNative.updateByteArray(context, input, inputOffset,
                     inputLen, output, outputOffset, output.length - outputOffset);
@@ -140,10 +160,10 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
                 output.length - outputOffset);
 
         // Keep the similar behavior as JCE, append the tag to end of output
-        if(this.mode == Openssl.ENCRYPT_MODE) {
+        if(this.cipherMode == Openssl.ENCRYPT_MODE) {
             ByteBuffer tag;
             tag = ByteBuffer.allocate(getTagLen());
-            Openssl.evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
+            evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
             tag.get(output, output.length-getTagLen(), getTagLen());
             len += getTagLen();
         }
@@ -158,7 +178,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
 
         int totalLen = 0;
         int len;
-        if (this.mode == Openssl.DECRYPT_MODE) {
+        if (this.cipherMode == Openssl.DECRYPT_MODE) {
             // if GCM-DECRYPT, we have to handle the buffered input
             // and the retrieve the trailing tag from input
             if (inBuffer != null && inBuffer.size() > 0) {
@@ -192,7 +212,7 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
             ByteBuffer tag = ByteBuffer.allocate(getTagLen());
             tag.put(input);
             tag.flip();
-            Openssl.evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_SET_TAG.getValue(),
+            evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_SET_TAG.getValue(),
                     getTagLen(), tag);
         } else {
             len = OpensslNative.update(context, input, input.position(),
@@ -210,10 +230,10 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
         totalLen += len;
 
         // Keep the similar behavior as JCE, append the tag to end of output
-        if (this.mode == Openssl.ENCRYPT_MODE) {
+        if (this.cipherMode == Openssl.ENCRYPT_MODE) {
             ByteBuffer tag;
             tag = ByteBuffer.allocate(getTagLen());
-            Openssl.evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
+            evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_GET_TAG.getValue(), getTagLen(), tag);
             output.put(tag);
             totalLen += getTagLen();
         }
@@ -243,5 +263,20 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
 
     private int getTagLen() {
         return tagBitLen < 0 ? DEFAULT_TAG_LEN : (tagBitLen >> 3);
+    }
+
+    /**
+     * a wrapper of OpensslNative.ctrl(long context, int type, int arg, byte[] data)
+     * Since native interface EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr) is generic,
+     * it may set/get any native char or long type to the data buffer(ptr).
+     * Here we use ByteBuffer and set nativeOrder to handle the endianness.
+     */
+    public static void evpCipherCtxCtrl(long context, int type, int arg, ByteBuffer bb) {
+        if (bb != null) {
+            bb.order(ByteOrder.nativeOrder());
+            OpensslNative.ctrl(context, type, arg, bb.array());
+        } else {
+            OpensslNative.ctrl(context, type, arg, null);
+        }
     }
 }

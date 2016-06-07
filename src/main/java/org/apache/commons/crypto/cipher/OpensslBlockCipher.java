@@ -30,9 +30,18 @@ import java.security.spec.AlgorithmParameterSpec;
 abstract class OpensslBlockCipher {
 
     protected long context = 0;
-    protected int mode = Openssl.DECRYPT_MODE;
+    protected int algorithmMode;
+    protected int padding;
 
-    abstract void init(int mode, int alg, int padding, byte[] key, AlgorithmParameterSpec params)
+    protected int cipherMode = Openssl.DECRYPT_MODE;
+
+    OpensslBlockCipher(long context, int algorithmMode, int padding) {
+        this.context = context;
+        this.algorithmMode = algorithmMode;
+        this.padding = padding;
+    }
+
+    abstract void init(int mode, byte[] key, AlgorithmParameterSpec params)
             throws InvalidAlgorithmParameterException;
 
     abstract int update(ByteBuffer input, ByteBuffer output)
