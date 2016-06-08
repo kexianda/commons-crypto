@@ -179,6 +179,8 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
         int totalLen = 0;
         int len;
         if (this.cipherMode == Openssl.DECRYPT_MODE) {
+            ByteBuffer tag = ByteBuffer.allocate(getTagLen());
+
             // if GCM-DECRYPT, we have to handle the buffered input
             // and the retrieve the trailing tag from input
             if (inBuffer != null && inBuffer.size() > 0) {
@@ -195,8 +197,13 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
                 len = OpensslNative.updateByteArrayByteBuffer(context, inputFinal, 0,
                         inputFinal.length - getTagLen(),
                         output, output.position(), output.remaining());
+
+                // retrieve tag
+                tag.put(inputFinal, inputFinal.length - getTagLen(), getTagLen());
+                tag.flip();
+
             } else {
-                // if no buffered input, just use the input buffer
+                // if no buffered input, just use the input directly
                 if (input.remaining() < getTagLen()) {
                     throw new AEADBadTagException("Input too short - need tag");
                 }
@@ -206,12 +213,13 @@ class OpensslGaloisCounterMode extends OpensslBlockCipher{
                         output.remaining());
 
                 input.position(input.position() + len);
+
+                // retrieve tag
+                tag.put(input);
+                tag.flip();
             }
 
             // set tag to EVP_Cipher for integrity verification in doFinal
-            ByteBuffer tag = ByteBuffer.allocate(getTagLen());
-            tag.put(input);
-            tag.flip();
             evpCipherCtxCtrl(context, EvpCtrlValues.AEAD_SET_TAG.getValue(),
                     getTagLen(), tag);
         } else {
