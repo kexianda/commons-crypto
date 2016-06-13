@@ -80,6 +80,11 @@ public class CryptoInputStream extends InputStream implements
     protected ByteBuffer inBuffer;
 
     /**
+     * The accumulated length of processed input
+     */
+    private int processedInputLength = 0;
+
+    /**
      * The decrypted data buffer. The data starts at outBuffer.position() and
      * ends at outBuffer.limit().
      */
@@ -151,6 +156,63 @@ public class CryptoInputStream extends InputStream implements
             int bufferSize, Key key, AlgorithmParameterSpec params)
             throws IOException {
         this(new ChannelInput(in), cipher, bufferSize, key, params);
+    }
+
+    /**
+     * Constructs a {@link CryptoInputStream} from an InputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * @param in the to-be-processed ReadableByteChannel instance.
+     * @param cipher an initialized Cipher object
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoInputStream(InputStream in, CryptoCipher cipher, int bufferSize)
+            throws IOException {
+        this(new StreamInput(in, bufferSize), cipher, bufferSize);
+    }
+
+    /**
+     * Constructs a {@link CryptoInputStream} from an InputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * @param in the to-be-processed input stream
+     * @param cipher an initialized Cipher object
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoInputStream(ReadableByteChannel in, CryptoCipher cipher,
+                             int bufferSize) throws IOException {
+        this(new ChannelInput(in), cipher, bufferSize);
+    }
+
+    /**
+     * Constructs a {@link CryptoInputStream} from an InputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * @param input the to-be-processed input stream
+     * @param cipher an initialized Cipher object
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoInputStream(Input input, CryptoCipher cipher, int bufferSize)
+            throws IOException {
+        this.input = input;
+        this.cipher = cipher;
+        this.bufferSize = Utils.checkBufferSize(cipher, bufferSize);
+
+        this.key = null;
+        this.params = null;
+
+        inBuffer = ByteBuffer.allocateDirect(this.bufferSize);
+        outBuffer = ByteBuffer.allocateDirect(this.bufferSize);
+        outBuffer.limit(0);
     }
 
     /**
@@ -233,9 +295,12 @@ public class CryptoInputStream extends InputStream implements
             return n;
         } else {
             // No data in the out buffer, try read new data and decrypt it
-            int nd = decryptMore();
-            if (nd <= 0)
-                return nd;
+            //int nd = decryptMore();
+            //if (nd <= 0)
+            //   return nd;
+            int nd = 0;
+            while (nd == 0) nd = decryptMore();
+            if (nd < 0) return -1;
 
             int n = Math.min(len, outBuffer.remaining());
             outBuffer.get(b, off, n);
@@ -509,11 +574,14 @@ public class CryptoInputStream extends InputStream implements
         inBuffer.flip();
         outBuffer.clear();
 
+        int inputLen = inBuffer.remaining();
         try {
             cipher.update(inBuffer, outBuffer);
         } catch (ShortBufferException e) {
             throw new IOException(e);
         }
+
+        processedInputLength += inputLen;
 
         // Clear the input buffer and prepare out buffer
         inBuffer.clear();
@@ -529,6 +597,8 @@ public class CryptoInputStream extends InputStream implements
         // Prepare the input buffer and clear the out buffer
         inBuffer.flip();
         outBuffer.clear();
+
+        adjustOutBufferCapacityIfNeeded();
 
         try {
             cipher.doFinal(inBuffer, outBuffer);
@@ -561,5 +631,18 @@ public class CryptoInputStream extends InputStream implements
     protected void freeBuffers() {
         Utils.freeDirectBuffer(inBuffer);
         Utils.freeDirectBuffer(outBuffer);
+    }
+
+    /** Adjust outBuffer's capacity if needed for GCM mode */
+    private void adjustOutBufferCapacityIfNeeded() {
+        // In GCM mode, the cipher return the whole recovered data(plain text)
+        // after tag is successfully verified.
+        // so, we have to make sure that outBuffer has the capacity.
+        if (cipher.getTransformation() == CipherTransformation.AES_GCM_NOPADDING
+                && outBuffer.remaining() < processedInputLength) {
+            // in such case, re-allocate sufficient buffer
+            Utils.freeDirectBuffer(outBuffer);
+            outBuffer = ByteBuffer.allocateDirect(processedInputLength);
+        }
     }
 }

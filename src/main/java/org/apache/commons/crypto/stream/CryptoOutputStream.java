@@ -155,6 +155,60 @@ public class CryptoOutputStream extends OutputStream implements
     /**
      * Constructs a {@link CryptoOutputStream}.
      *
+     * @param out the output stream.
+     * @param cipher the CryptoCipher instance.
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoOutputStream(OutputStream out, CryptoCipher cipher,
+                              int bufferSize)
+            throws IOException {
+        this(new StreamOutput(out, bufferSize), cipher, bufferSize);
+    }
+
+    /**
+     * Constructs a {@link CryptoOutputStream}.
+     *
+     * @param channel the WritableByteChannel instance.
+     * @param cipher the cipher instance.
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoOutputStream(WritableByteChannel channel, CryptoCipher cipher,
+                              int bufferSize)
+            throws IOException {
+        this(new ChannelOutput(channel), cipher, bufferSize);
+    }
+
+    /**
+     * Constructs a {@link CryptoOutputStream} from an output stream and a
+     * Cipher.
+     * <br>Note: if the specified output stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * @param output the to-be-processed output stream
+     * @param cipher an initialized Cipher object
+     * @param bufferSize the bufferSize.
+     * @throws IOException if an I/O error occurs.
+     */
+    public CryptoOutputStream(Output output, CryptoCipher cipher, int bufferSize)
+            throws IOException {
+        this.output = output;
+        this.cipher = cipher;
+        this.bufferSize = Utils.checkBufferSize(cipher, bufferSize);
+
+        this.key = null;
+        this.params = null;
+
+        inBuffer = ByteBuffer.allocateDirect(this.bufferSize);
+        outBuffer = ByteBuffer.allocateDirect(this.bufferSize
+                + cipher.getTransformation().getAlgorithmBlockSize());
+        outBuffer.limit(0);
+    }
+
+    /**
+     * Constructs a {@link CryptoOutputStream}.
+     *
      * @param output the output stream.
      * @param cipher the CryptoCipher instance.
      * @param bufferSize the bufferSize.
