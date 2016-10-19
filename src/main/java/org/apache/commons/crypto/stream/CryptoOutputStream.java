@@ -19,6 +19,7 @@
 package org.apache.commons.crypto.stream;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
@@ -31,9 +32,12 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 
 import org.apache.commons.crypto.cipher.CryptoCipher;
+import org.apache.commons.crypto.stream.input.Input;
+import org.apache.commons.crypto.stream.input.StreamInput;
 import org.apache.commons.crypto.stream.output.ChannelOutput;
 import org.apache.commons.crypto.stream.output.Output;
 import org.apache.commons.crypto.stream.output.StreamOutput;
@@ -125,6 +129,39 @@ public class CryptoOutputStream extends OutputStream implements
     }
 
     /**
+     * Constructs a CipherOutputStream from an OutputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * Constructs a CipherOutputStream from an OutputStream and a Cipher.
+     *
+     * @param out the to-be-processed output stream
+     * @param cipher an initialized Cipher object
+     * @param bufferSize an initialized Cipher object
+     */
+    public CryptoOutputStream(OutputStream out, CryptoCipher cipher, int bufferSize) {
+        this(new StreamOutput(out, bufferSize), cipher, bufferSize);
+    }
+
+    protected CryptoOutputStream(
+            Output output,
+            CryptoCipher cipher,
+            int bufferSize) {
+        this.output = output;
+        this.cipher = cipher;
+        this.bufferSize = CryptoInputStream.checkBufferSize(cipher, bufferSize);
+        inBuffer = ByteBuffer.allocateDirect(this.bufferSize);
+        outBuffer = ByteBuffer.allocateDirect(this.bufferSize
+                + cipher.getBlockSize());
+        outBuffer.limit(0);
+
+        // assume that the cipher is already initialized,
+        key = null;
+        params =  null;
+    }
+
+    /**
      * Constructs a {@link CryptoOutputStream}.
      *
      * @param out the output stream.
@@ -177,7 +214,7 @@ public class CryptoOutputStream extends OutputStream implements
         this.key = key;
         this.params = params;
 
-        if (!(params instanceof IvParameterSpec)) {
+        if (!(params instanceof IvParameterSpec || params instanceof GCMParameterSpec)) {
             // other AlgorithmParameterSpec such as GCMParameterSpec is not
             // supported now.
             throw new IOException("Illegal parameters");

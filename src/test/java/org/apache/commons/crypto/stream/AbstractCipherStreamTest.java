@@ -28,8 +28,10 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.Properties;
 import java.util.Random;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -261,9 +263,8 @@ public abstract class AbstractCipherStreamTest {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (OutputStream out = new CryptoOutputStream(baos, cipher,
-                defaultBufferSize, new SecretKeySpec(key, "AES"),
-                new IvParameterSpec(iv))) {
+        try (OutputStream out = getCryptoOutputStream(baos, cipher,
+                defaultBufferSize, iv, false)) {
             out.write(data);
             out.flush();
         }
@@ -273,25 +274,34 @@ public abstract class AbstractCipherStreamTest {
     protected CryptoInputStream getCryptoInputStream(ByteArrayInputStream bais,
             CryptoCipher cipher, int bufferSize, byte[] iv, boolean withChannel)
             throws IOException {
+        AlgorithmParameterSpec ivParam =
+                cipher.getAlgorithm().contains("AES/GCM") ?
+                        new GCMParameterSpec(16*8, iv) :
+                        new IvParameterSpec(iv);
         if (withChannel) {
             return new CryptoInputStream(Channels.newChannel(bais), cipher,
                     bufferSize, new SecretKeySpec(key, "AES"),
-                    new IvParameterSpec(iv));
+                    ivParam);
         }
         return new CryptoInputStream(bais, cipher, bufferSize,
-                new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
+                new SecretKeySpec(key, "AES"), ivParam);
     }
 
     protected CryptoOutputStream getCryptoOutputStream(
             ByteArrayOutputStream baos, CryptoCipher cipher, int bufferSize,
             byte[] iv, boolean withChannel) throws IOException {
+        boolean isGcmMode = cipher.getAlgorithm().contains("AES/GCM");
+        AlgorithmParameterSpec ivParam = isGcmMode ?
+                        new GCMParameterSpec(16, iv) :
+                        new IvParameterSpec(iv);
+
         if (withChannel) {
             return new CryptoOutputStream(Channels.newChannel(baos), cipher,
                     bufferSize, new SecretKeySpec(key, "AES"),
                     new IvParameterSpec(iv));
         }
         return new CryptoOutputStream(baos, cipher, bufferSize,
-                new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
+                new SecretKeySpec(key, "AES"), ivParam);
     }
 
     private int readAll(InputStream in, byte[] b, int offset, int len)

@@ -31,6 +31,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 
 import org.apache.commons.crypto.Crypto;
@@ -143,6 +144,55 @@ public class CryptoInputStream extends InputStream implements
     }
 
     /**
+     * Constructs a CipherInputStream from an InputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * Constructs a CipherInputStream from an InputStream and a Cipher.
+     *
+     * @param in the to-be-processed input stream
+     * @param cipher an initialized Cipher object
+     */
+    public CryptoInputStream(Properties props, InputStream in, CryptoCipher cipher) {
+        this(new StreamInput(in,
+                        CryptoInputStream.checkBufferSize(cipher,CryptoInputStream.getBufferSize(props))),
+                cipher,
+                CryptoInputStream.getBufferSize(props));
+    }
+
+    /**
+     * Constructs a CipherInputStream from an InputStream and a
+     * Cipher.
+     * <br>Note: if the specified input stream or cipher is
+     * null, a NullPointerException may be thrown later when
+     * they are used.
+     * Constructs a CipherInputStream from an InputStream and a Cipher.
+     *
+     * @param in the to-be-processed input stream
+     * @param cipher an initialized Cipher object
+     */
+    public CryptoInputStream(Properties props, ReadableByteChannel in, CryptoCipher cipher) {
+        this(new ChannelInput(in), cipher, CryptoInputStream.getBufferSize(props));
+    }
+
+    protected CryptoInputStream(
+            Input input,
+            CryptoCipher cipher,
+            int bufferSize) {
+        this.input = input;
+        this.cipher = cipher;
+        this.bufferSize = CryptoInputStream.checkBufferSize(cipher, bufferSize);
+        inBuffer = ByteBuffer.allocateDirect(this.bufferSize);
+        outBuffer = ByteBuffer.allocateDirect(this.bufferSize); //+ cipher.getBlockSize()
+        outBuffer.limit(0);
+
+        // assume that the cipher is already initialized,
+        key = null;
+        params =  null;
+    }
+
+    /**
      * Constructs a {@link CryptoInputStream}.
      *
      * @param cipher the cipher instance.
@@ -192,7 +242,7 @@ public class CryptoInputStream extends InputStream implements
 
         this.key = key;
         this.params = params;
-        if (!(params instanceof IvParameterSpec)) {
+        if (!(params instanceof IvParameterSpec || params instanceof GCMParameterSpec)) {
             // other AlgorithmParameterSpec such as GCMParameterSpec is not
             // supported now.
             throw new IOException("Illegal parameters");
