@@ -23,7 +23,7 @@ public class CbcNoPaddingCipherStreamTest extends AbstractCipherStreamTest {
 
     @Override
     public void setUp() throws IOException {
-        transformation = "AES/GCM/NoPadding";
+        transformation = "AES/CBC/NoPadding";
     }
 
 }

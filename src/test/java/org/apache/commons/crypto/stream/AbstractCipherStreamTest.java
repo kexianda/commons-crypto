@@ -292,13 +292,13 @@ public abstract class AbstractCipherStreamTest {
             byte[] iv, boolean withChannel) throws IOException {
         boolean isGcmMode = cipher.getAlgorithm().contains("AES/GCM");
         AlgorithmParameterSpec ivParam = isGcmMode ?
-                        new GCMParameterSpec(16, iv) :
+                        new GCMParameterSpec(16*8, iv) :
                         new IvParameterSpec(iv);
 
         if (withChannel) {
             return new CryptoOutputStream(Channels.newChannel(baos), cipher,
                     bufferSize, new SecretKeySpec(key, "AES"),
-                    new IvParameterSpec(iv));
+                    ivParam);
         }
         return new CryptoOutputStream(baos, cipher, bufferSize,
                 new SecretKeySpec(key, "AES"), ivParam);
