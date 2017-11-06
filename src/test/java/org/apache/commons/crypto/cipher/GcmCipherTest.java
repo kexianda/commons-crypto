@@ -249,6 +249,119 @@ public class GcmCipherTest {
         }
     }
 
+    @Test
+    public void testGMac() {
+        // for GMAC,  aad is the input data,
+        // tag is the digest message
+
+        Random r = new Random();
+        byte[] keyBytes = new byte[32];
+        byte[] input = new byte[0];  // no input for GMAC
+        byte[] ivBytes = new byte[16];
+
+        byte[] tag_orig = new byte[16]; // JDK's tag
+        byte[] tag = new byte[16];
+
+        // aad is the data to be hashed
+        byte[] aad = new byte[r.nextInt() % 1000 + 1000 ];
+
+        r.nextBytes(keyBytes);
+        r.nextBytes(input);
+        r.nextBytes(ivBytes);
+        r.nextBytes(aad);
+
+        try {
+            {
+                Cipher c = Cipher.getInstance(transformation);
+                Key key = new SecretKeySpec(keyBytes, "AES");
+                GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+                c.init(Cipher.ENCRYPT_MODE, key, iv);
+                c.updateAAD(aad);
+                c.doFinal(input, 0, input.length, tag_orig, 0);
+            }
+
+            {
+                CryptoCipher c = Utils.getCipherInstance(transformation, props);
+                Key key = new SecretKeySpec(keyBytes, "AES");
+                GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+                c.init(Cipher.ENCRYPT_MODE, key, iv);
+                c.updateAAD(aad);
+                c.doFinal(input, 0, input.length, tag, 0);
+                c.close();
+            }
+
+            // tag should be the same as JDK's cipher
+            Assert.assertArrayEquals(tag_orig, tag);
+
+            // like JDK's decrypt mode. The plaintext+tag is the input for decrypt mode
+            // let's verify the add & tag now
+            {
+                CryptoCipher c = Utils.getCipherInstance(transformation, props);
+                Key key = new SecretKeySpec(keyBytes, "AES");
+                GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+                c.init(Cipher.DECRYPT_MODE, key, iv);
+                c.updateAAD(aad);
+                c.doFinal(tag, 0, tag.length, input, 0);
+                c.close();
+            }
+        }
+        catch (Exception ex) {
+            Assert.fail(ex.getMessage());
+        }
+    }
+
+    @Test(expected = AEADBadTagException.class)
+    public void testGMacTamperedData() throws Exception {
+        Random r = new Random();
+        byte[] keyBytes = new byte[32];
+        byte[] input = new byte[0];
+        byte[] ivBytes = new byte[16];
+
+        byte[] tag = new byte[16];
+
+        byte[] aad = new byte[r.nextInt() % 1000 + 1000 ];
+
+        r.nextBytes(keyBytes);
+        r.nextBytes(input);
+        r.nextBytes(ivBytes);
+        r.nextBytes(aad);
+
+        try {
+            CryptoCipher c = Utils.getCipherInstance(transformation, props);
+            Key key = new SecretKeySpec(keyBytes, "AES");
+            GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+            c.init(Cipher.ENCRYPT_MODE, key, iv);
+            c.updateAAD(aad);
+            c.doFinal(input, 0, input.length, tag, 0);
+            c.close();
+        }
+        catch (Exception ex) {
+            Assert.fail(ex.getMessage());
+        }
+
+        try {
+            // like JDK's decrypt mode. The plaintext+tag is the input for decrypt mode
+            CryptoCipher c = Utils.getCipherInstance(transformation, props);
+            Key key = new SecretKeySpec(keyBytes, "AES");
+            GCMParameterSpec iv = new GCMParameterSpec(128, ivBytes);
+            c.init(Cipher.DECRYPT_MODE, key, iv);
+
+            // if the origin data is tampered
+            aad[0] = (byte) (aad[0] + 1);
+            c.updateAAD(aad);
+
+            c.doFinal(tag, 0, tag.length, input, 0);
+            c.close();
+
+        }
+        catch (AEADBadTagException ex) {
+            Assert.assertTrue("Tag mismatch!".equals(ex.getMessage()));
+            throw ex;
+        }
+        catch (Exception ex) {
+            Assert.fail(ex.getMessage());
+        }
+    }
 
     private void testGcmEncryption(String kHex, String pHex, String ivHex, String aadHex,
                                    String cHex, String tHex){
